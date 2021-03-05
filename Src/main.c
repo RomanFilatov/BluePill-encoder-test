@@ -43,20 +43,78 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim1;
 
+UART_HandleTypeDef huart1;
+
 /* USER CODE BEGIN PV */
-volatile u16 AencH=32768;
+
+volatile uint16_t AencH=32768; Aenc=0;
+volatile uint16_t currTick=0;
+char buffer[12];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
+char* num_to_str16(uint16_t n, char *buffer);
+
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+char* num_to_str16(uint16_t n, char *buffer) // offset 1023
+{
+	char sign=" ";
+
+	if (n>1023){
+		n=n-1023;
+		sign="-";
+	}
+
+    uint8_t d4, d3, d2, d1, q, d0;
+
+        d1 = (n>>4)  & 0xF;
+        d2 = (n>>8)  & 0xF;
+        d3 = (n>>12) & 0xF;
+
+        d0 = 6*(d3 + d2 + d1) + (n & 0xF);
+        q = (d0 * 0xCD) >> 11;
+        d0 = d0 - 10*q;
+
+        d1 = q + 9*d3 + 5*d2 + d1;
+        q = (d1 * 0xCD) >> 11;
+        d1 = d1 - 10*q;
+
+        d2 = q + 2*d2;
+        q = (d2 * 0x1A) >> 8;
+        d2 = d2 - 10*q;
+
+        d3 = q + 4*d3;
+        d4 = (d3 * 0x1A) >> 8;
+        d3 = d3 - 10*d4;
+
+        char *ptr = buffer;
+    *ptr++ =  '0' // for sign
+    *ptr++ = ( d4 + '0' );
+    *ptr++ = ( d3 + '0' );
+    *ptr++ = ( d2 + '0' );
+    *ptr++ = ( d1 + '0' );
+    *ptr++ = ( d0 + '0' );
+    *ptr++ = '\r';
+    *ptr++ = '\n';
+    *ptr = 0;
+uint8_t cco=0;
+        while(buffer[cco] == '0') { // remove trailing zero
+        	buffer[cco]=' ';
+        cco++;}
+        cco--;
+        buffer [cco] =  sign;
+        return buffer;
+}
 
 /* USER CODE END 0 */
 
@@ -90,6 +148,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM1_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -100,6 +159,12 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  while (currTick>HAL_GetTick()){} // wait 100 ms
+
+	  currTick=HAL_GetTick()+100;
+	  Aenc=TIM1->CNT;
+	  buffer = num_to_str16(Aenc, buffer);
+	  HAL_UART_Transmit(&huart1, buffer, 9, 50);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -162,7 +227,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 0xFFFF;
+  htim1.Init.Period = 2047;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -192,6 +257,39 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -202,10 +300,11 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin : Sync_Pin */
   GPIO_InitStruct.Pin = Sync_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(Sync_GPIO_Port, &GPIO_InitStruct);
 

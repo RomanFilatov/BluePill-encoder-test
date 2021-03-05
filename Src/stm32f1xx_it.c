@@ -58,7 +58,7 @@
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim1;
 /* USER CODE BEGIN EV */
-extern volatile u16 AencH;
+extern volatile uint16_t AencH;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -203,14 +203,14 @@ void SysTick_Handler(void)
 void TIM1_UP_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_IRQn 0 */
-  if (TIM_GetITStatus(TIM1, TIM_IT_Update) != RESET){
+  if (HAL_TIM_GET_FLAG(TIM1, TIM_FLAG_UPDATE) != RESET){
       if(TIM1->CR1 & TIM_CR1_DIR) AencH--;
    else AencH++;
- TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
+ //TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
     
   } 
   /* USER CODE END TIM1_UP_IRQn 0 */
- // HAL_TIM_IRQHandler(&htim1);
+  HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_UP_IRQn 1 */
 
   /* USER CODE END TIM1_UP_IRQn 1 */
@@ -223,8 +223,16 @@ void EXTI15_10_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI15_10_IRQn 0 */
 if (EXTI->PR & (1<<12)) {
-    AencH =0;
-    TIM1->CNT=0;}
+	if((TIM1->CR1 & TIM_CR1_DIR)&(GPIOA->IDR & GPIO_PIN_12)) // pos dir and Sync input =1
+	{
+    AencH =1023;
+    TIM1->CNT=1023; }
+	if(!(TIM1->CR1 & TIM_CR1_DIR)&!(GPIOA->IDR & GPIO_PIN_12)) // neg dir and Sync input =0
+	{
+  //  AencH =1023;
+    TIM1->CNT=1023; }
+
+	}
 
   /* USER CODE END EXTI15_10_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_12);
